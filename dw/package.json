@@ -1,0 +1,10 @@
+
+{
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^4.18.2"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

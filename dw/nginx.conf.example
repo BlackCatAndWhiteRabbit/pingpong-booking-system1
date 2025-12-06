@@ -1,0 +1,71 @@
+# Nginx 配置文件示例
+# 将此文件复制到 /etc/nginx/sites-available/pingpong-booking
+# 然后创建软链接: sudo ln -s /etc/nginx/sites-available/pingpong-booking /etc/nginx/sites-enabled/
+
+server {
+    listen 80;
+    server_name 您的域名或服务器IP;  # 修改为您的域名或IP
+
+    # 前端静态文件
+    location / {
+        root /root/pingpong-booking;  # 修改为您的项目路径
+        index web.html;
+        try_files $uri $uri/ /web.html;
+    }
+
+    # API 代理到 Node.js 应用
+    location /api {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 超时设置
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # 静态资源缓存
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        root /root/pingpong-booking;  # 修改为您的项目路径
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # 日志配置
+    access_log /var/log/nginx/pingpong-booking-access.log;
+    error_log /var/log/nginx/pingpong-booking-error.log;
+
+    # 文件上传大小限制
+    client_max_body_size 10M;
+}
+
+# HTTPS 配置示例（需要 SSL 证书）
+# server {
+#     listen 443 ssl http2;
+#     server_name 您的域名;
+# 
+#     ssl_certificate /path/to/your/certificate.crt;
+#     ssl_certificate_key /path/to/your/private.key;
+# 
+#     # SSL 配置
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers HIGH:!aNULL:!MD5;
+#     ssl_prefer_server_ciphers on;
+# 
+#     # 其他配置同上...
+# }
+# 
+# # HTTP 重定向到 HTTPS
+# server {
+#     listen 80;
+#     server_name 您的域名;
+#     return 301 https://$server_name$request_uri;
+# }
+
