@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>Welcome to The Ping-Pong Online</h1>
+        <h2>愿你在这里找到最好的球友</h2>
+        
+        <div class="links">
+            <a href="booking.html">发起预约</a>
+            <a href="accepting.html">接受预约</a>
+        </div>
+
+        <!-- 测试模式按钮（仅管理员可见） -->
+        <div id="testModeSection" class="test-mode-section" style="display: none;">
+            <button onclick="openTestMode()" class="test-mode-btn">测试模式</button>
+        </div>
+
+        <!-- 测试模式弹窗 -->
+        <div id="testModeModal" class="test-mode-modal" style="display: none;">
+            <div class="test-mode-content">
+                <h3>测试模式</h3>
+                
+                <div class="test-mode-status">
+                    <p><strong>测试模式状态:</strong> <span id="testModeStatus">关闭</span></p>
+                    <p><strong>当前时间:</strong> <span id="currentTimeDisplay">加载中...</span></p>
+                    <p><strong>真实时间:</strong> <span id="realTimeDisplay">加载中...</span></p>
+                </div>
+
+                <div class="test-mode-controls">
+                    <div class="test-mode-toggle">
+                        <button onclick="toggleTestMode()" id="testModeToggleBtn">开启测试模式</button>
+                    </div>
+                    
+                    <div class="virtual-time-controls">
+                        <h4>设置虚拟时间</h4>
+                        <input type="datetime-local" id="virtualTimeInput">
+                        <button onclick="setVirtualTime()">设置虚拟时间</button>
+                    </div>
+
+                    <div class="quick-tests">
+                        <h4>快速测试场景</h4>
+                        <button onclick="setTestScenario('before2hours')">预约开始前2小时</button>
+                        <button onclick="setTestScenario('afterStart')">预约开始后</button>
+                        <button onclick="setTestScenario('afterEnd')">预约结束后1小时</button>
+                        <button onclick="setTestScenario('reset')">重置为真实时间</button>
+                    </div>
+                </div>
+
+                <div class="test-mode-actions">
+                    <button onclick="closeTestMode()">关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 用户登录状态区域 -->
+        <div id="userStatus" class="user-status">
+            <div id="loginLinks" class="login-links">
+                <a href="register.html" class="auth-link">注册</a>
+                <a href="login.html" class="auth-link">登录</a>
+            </div>
+            <div id="userInfo" class="user-info" style="display: none;">
+                <span id="welcomeText">你好，<span id="userName"></span></span>
+                <button onclick="goToProfile()" class="profile-btn">个人主页</button>
+                <button onclick="logout()" class="logout-btn">退出</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载时检查登录状态
+        document.addEventListener('DOMContentLoaded', function() {
+            checkLoginStatus();
+        });
+
+        // 检查登录状态
+        function checkLoginStatus() {
+            const sessionId = localStorage.getItem('sessionId');
+            const userName = localStorage.getItem('userName');
+            
+            console.log('检查登录状态:', { sessionId, userName });
+            
+            if (sessionId && userName) {
+                // 已登录，显示用户信息
+                console.log('用户已登录，显示退出按钮');
+                document.getElementById('loginLinks').style.display = 'none';
+                document.getElementById('userInfo').style.display = 'block';
+                document.getElementById('userName').textContent = userName;
+            } else {
+                // 未登录，显示登录注册链接
+                console.log('用户未登录，显示登录注册链接');
+                document.getElementById('loginLinks').style.display = 'block';
+                document.getElementById('userInfo').style.display = 'none';
+            }
+        }
+
+        // 跳转到个人主页
+        function goToProfile() {
+            const studentId = localStorage.getItem('userStudentId');
+            if (studentId) {
+                window.location.href = `profile.html?studentId=${studentId}`;
+            } else {
+                alert('无法获取用户信息，请重新登录');
+                logout();
+            }
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('userStudentId');
+            localStorage.removeItem('isAdmin');
+            checkLoginStatus();
+            alert('已退出登录');
+        }
+
+        // 检查管理员权限并显示测试模式按钮
+        function checkAdminStatus() {
+            const sessionId = localStorage.getItem('sessionId');
+            const isAdmin = localStorage.getItem('isAdmin') === 'true';
+            
+            if (sessionId && isAdmin) {
+                document.getElementById('testModeSection').style.display = 'block';
+            } else {
+                document.getElementById('testModeSection').style.display = 'none';
+            }
+        }
+
+        // 打开测试模式弹窗
+        function openTestMode() {
+            document.getElementById('testModeModal').style.display = 'block';
+            loadTestModeStatus();
+        }
+
+        // 关闭测试模式弹窗
+        function closeTestMode() {
+            document.getElementById('testModeModal').style.display = 'none';
+        }
+
+        // 加载测试模式状态
+        async function loadTestModeStatus() {
+            const sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test-mode', {
+                    headers: {
+                        'Authorization': sessionId
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    updateTestModeDisplay(data);
+                } else {
+                    alert('加载测试模式状态失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            }
+        }
+
+        // 更新测试模式显示
+        function updateTestModeDisplay(data) {
+            document.getElementById('testModeStatus').textContent = data.testMode ? '开启' : '关闭';
+            document.getElementById('currentTimeDisplay').textContent = formatDateTime(data.currentTime);
+            document.getElementById('realTimeDisplay').textContent = formatDateTime(data.realTime);
+            
+            const toggleBtn = document.getElementById('testModeToggleBtn');
+            toggleBtn.textContent = data.testMode ? '关闭测试模式' : '开启测试模式';
+            toggleBtn.style.background = data.testMode ? '#f44336' : '#4CAF50';
+        }
+
+        // 切换测试模式
+        async function toggleTestMode() {
+            const sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test-mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    },
+                    body: JSON.stringify({
+                        enabled: !(document.getElementById('testModeStatus').textContent === '开启')
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    updateTestModeDisplay(data);
+                    alert('测试模式状态已更新');
+                } else {
+                    alert('切换测试模式失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            }
+        }
+
+        // 设置虚拟时间
+        async function setVirtualTime() {
+            const virtualTimeInput = document.getElementById('virtualTimeInput').value;
+            if (!virtualTimeInput) {
+                alert('请选择虚拟时间');
+                return;
+            }
+
+            const sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                alert('请先登录');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test-mode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    },
+                    body: JSON.stringify({
+                        enabled: true,
+                        virtualTime: virtualTimeInput
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    updateTestModeDisplay(data);
+                    alert('虚拟时间设置成功');
+                } else {
+                    alert('设置虚拟时间失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            }
+        }
+
+        // 设置测试场景
+        function setTestScenario(scenario) {
+            const now = new Date();
+            let targetTime;
+
+            switch (scenario) {
+                case 'before2hours':
+                    // 预约开始前2小时
+                    targetTime = new Date(now);
+                    targetTime.setHours(now.getHours() - 2);
+                    break;
+                case 'afterStart':
+                    // 预约开始后
+                    targetTime = new Date(now);
+                    targetTime.setHours(now.getHours() + 1);
+                    break;
+                case 'afterEnd':
+                    // 预约结束后1小时
+                    targetTime = new Date(now);
+                    targetTime.setHours(now.getHours() + 2);
+                    break;
+                case 'reset':
+                    // 重置为真实时间
+                    document.getElementById('virtualTimeInput').value = '';
+                    setVirtualTime();
+                    return;
+                default:
+                    return;
+            }
+
+            document.getElementById('virtualTimeInput').value = targetTime.toISOString().slice(0, 16);
+            setVirtualTime();
+        }
+
+        // 格式化日期时间显示
+        function formatDateTime(dateTimeString) {
+            const date = new Date(dateTimeString);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // 页面加载时检查管理员权限
+        document.addEventListener('DOMContentLoaded', function() {
+            checkLoginStatus();
+            checkAdminStatus();
+        });
+    </script>
+</body>
+</html>

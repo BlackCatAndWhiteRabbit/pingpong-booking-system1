@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发起预约 - 乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>发起新预约</h1>
+        <h2>填写预约信息</h2>
+        
+        <!-- 登录提示 -->
+        <div id="loginPrompt" class="login-prompt" style="display: none;">
+            <p>请先<a href="login.html">登录</a>才能发起预约</p>
+        </div>
+
+        <form id="bookingForm" style="display: none;">
+            <div class="form-group">
+                <span>发起人</span>
+                <input type="text" id="name" placeholder="你的名字" readonly>
+            </div>
+            <div class="form-group">
+                <span>学号</span>
+                <input type="text" id="studentId" placeholder="你的学号" readonly>
+            </div>
+            
+            <div class="form-group">
+                <span>预约日期</span>
+                <input type="date" id="bookingDate" name="day" required>
+                <small class="date-hint">只能预约今天到未来14天内的日期</small>
+            </div>
+            
+            <div class="form-group">
+                <span>你打算几点开始</span>
+                <div class="radio-group">
+                    <label><input type="radio" name="time" value="7" required>7</label>
+                    <label><input type="radio" name="time" value="8">8</label>
+                    <label><input type="radio" name="time" value="9">9</label>
+                    <label><input type="radio" name="time" value="10">10</label>
+                    <label><input type="radio" name="time" value="11">11</label>
+                    <label><input type="radio" name="time" value="12">12</label>
+                    <label><input type="radio" name="time" value="13">13</label>
+                    <label><input type="radio" name="time" value="14">14</label>
+                </div>
+                <div class="radio-group">
+                    <label><input type="radio" name="time" value="15">15</label>
+                    <label><input type="radio" name="time" value="16">16</label>
+                    <label><input type="radio" name="time" value="17">17</label>
+                    <label><input type="radio" name="time" value="18">18</label>
+                    <label><input type="radio" name="time" value="19">19</label>
+                    <label><input type="radio" name="time" value="20">20</label>
+                    <label><input type="radio" name="time" value="21">21</label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <span>球台</span>
+                <div class="radio-group">
+                    <label><input type="radio" name="table" value="1" required>1</label>
+                    <label><input type="radio" name="table" value="2">2</label>
+                    <label><input type="radio" name="table" value="3">3</label>
+                    <label><input type="radio" name="table" value="4">4</label>
+                    <label><input type="radio" name="table" value="5">5</label>
+                    <label><input type="radio" name="table" value="6">6</label>
+                    <label><input type="radio" name="table" value="7">7</label>
+                    <label><input type="radio" name="table" value="8">8</label>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <span>人数</span>
+                <div class="radio-group">
+                    <label><input type="radio" name="maxPlayers" value="2" required>2</label>
+                    <label><input type="radio" name="maxPlayers" value="3">3</label>
+                    <label><input type="radio" name="maxPlayers" value="4">4</label>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit">提交预约</button>
+                <br>
+                <br>
+            </div>
+        </form>
+
+        <!-- 消息提示 -->
+        <div id="message" class="backend-message" style="display: none;"></div>
+
+        <div class="links">
+            <a href="web.html">返回主页</a>
+        </div>
+
+    </div>
+
+    <script>
+        // 页面加载时检查登录状态
+        document.addEventListener('DOMContentLoaded', function() {
+            checkLoginStatus();
+        });
+
+        // 检查登录状态
+        function checkLoginStatus() {
+            const sessionId = localStorage.getItem('sessionId');
+            const userName = localStorage.getItem('userName');
+            const userStudentId = localStorage.getItem('userStudentId');
+            
+            if (sessionId && userName && userStudentId) {
+                // 已登录，显示表单并填充用户信息
+                document.getElementById('loginPrompt').style.display = 'none';
+                document.getElementById('bookingForm').style.display = 'block';
+                document.getElementById('name').value = userName;
+                document.getElementById('studentId').value = userStudentId;
+            } else {
+                // 未登录，显示登录提示
+                document.getElementById('loginPrompt').style.display = 'block';
+                document.getElementById('bookingForm').style.display = 'none';
+            }
+        }
+
+        // 页面加载时设置日期选择器的最小和最大日期，并更新时间选项
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const maxDate = new Date();
+            maxDate.setDate(today.getDate() + 14);
+            
+            const dateInput = document.getElementById('bookingDate');
+            dateInput.min = today.toISOString().split('T')[0];
+            dateInput.max = maxDate.toISOString().split('T')[0];
+            dateInput.value = today.toISOString().split('T')[0]; // 默认选择今天
+            
+            // 初始化时间选项
+            updateTimeOptions();
+            
+            // 监听日期变化，更新时间选项
+            dateInput.addEventListener('change', updateTimeOptions);
+        });
+
+        // 更新时间选项，确保今天只显示还未到的时间段
+        function updateTimeOptions() {
+            const dateInput = document.getElementById('bookingDate');
+            const selectedDate = dateInput.value;
+            const today = new Date().toISOString().split('T')[0];
+            const currentHour = new Date().getHours();
+            
+            // 如果是今天，禁用已过的时间段
+            if (selectedDate === today) {
+                const timeInputs = document.querySelectorAll('input[name="time"]');
+                timeInputs.forEach(input => {
+                    const timeValue = parseInt(input.value);
+                    if (timeValue <= currentHour) {
+                        input.disabled = true;
+                        input.parentElement.style.opacity = '0.5';
+                        input.parentElement.style.cursor = 'not-allowed';
+                    } else {
+                        input.disabled = false;
+                        input.parentElement.style.opacity = '1';
+                        input.parentElement.style.cursor = 'pointer';
+                    }
+                });
+            } else {
+                // 如果不是今天，启用所有时间段
+                const timeInputs = document.querySelectorAll('input[name="time"]');
+                timeInputs.forEach(input => {
+                    input.disabled = false;
+                    input.parentElement.style.opacity = '1';
+                    input.parentElement.style.cursor = 'pointer';
+                });
+            }
+        }
+
+        // 处理表单提交
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // 获取表单数据
+            const name = document.getElementById('name').value.trim();
+            const studentId = document.getElementById('studentId').value.trim();
+            const day = document.getElementById('bookingDate').value;
+            const time = document.querySelector('input[name="time"]:checked')?.value;
+            const table = document.querySelector('input[name="table"]:checked')?.value;
+            const maxPlayers = document.querySelector('input[name="maxPlayers"]:checked')?.value;
+
+            // 验证必填字段
+            if (!name || !studentId || !day || !time || !table || !maxPlayers) {
+                showMessage('请填写所有必填字段', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/bookings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name,
+                        studentId,
+                        day,
+                        time,
+                        table,
+                        maxPlayers
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('预约创建成功！', 'success');
+                    // 清空表单
+                    document.getElementById('bookingForm').reset();
+                    // 3秒后跳转到主页
+                    setTimeout(() => {
+                        window.location.href = 'web.html';
+                    }, 3000);
+                } else {
+                    showMessage(data.message || '预约创建失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error creating booking:', error);
+            }
+        });
+
+        // 显示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.className = `backend-message ${type}`;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

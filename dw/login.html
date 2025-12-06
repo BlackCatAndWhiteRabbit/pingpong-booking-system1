@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录 - 乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>用户登录</h1>
+        <h2>登录您的账户</h2>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <span>学号</span>
+                <input type="text" id="studentId" placeholder="请输入您的学号" required>
+            </div>
+            <div class="form-group">
+                <span>密码</span>
+                <input type="password" id="password" placeholder="请输入密码" required>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit">登录</button>
+                <br>
+                <br>
+            </div>
+        </form>
+
+        <!-- 消息提示 -->
+        <div id="message" class="backend-message" style="display: none;"></div>
+
+        <div class="links">
+            <a href="web.html">返回主页</a>
+            <a href="register.html">没有账户？注册</a>
+        </div>
+
+    </div>
+
+    <script>
+        // 处理表单提交
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // 获取表单数据
+            const studentId = document.getElementById('studentId').value.trim();
+            const password = document.getElementById('password').value;
+
+            // 验证必填字段
+            if (!studentId || !password) {
+                showMessage('请填写学号和密码', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        studentId,
+                        password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 保存会话ID到localStorage
+                    localStorage.setItem('sessionId', data.sessionId);
+                    localStorage.setItem('userName', data.user.name);
+                    localStorage.setItem('userStudentId', data.user.studentId);
+                    localStorage.setItem('isAdmin', data.user.isAdmin);
+                    
+                    showMessage('登录成功！正在跳转到主页...', 'success');
+                    // 3秒后跳转到主页
+                    setTimeout(() => {
+                        window.location.href = 'web.html';
+                    }, 3000);
+                } else {
+                    showMessage(data.message || '登录失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error logging in:', error);
+            }
+        });
+
+        // 显示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.className = `backend-message ${type}`;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // 页面加载时检查是否已登录
+        document.addEventListener('DOMContentLoaded', function() {
+            const sessionId = localStorage.getItem('sessionId');
+            if (sessionId) {
+                // 如果已登录，自动跳转到主页
+                window.location.href = 'web.html';
+            }
+        });
+    </script>
+</body>
+</html>

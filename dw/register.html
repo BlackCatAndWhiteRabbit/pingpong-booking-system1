@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户注册 - 乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>用户注册</h1>
+        <h2>创建您的账户</h2>
+        
+        <form id="registerForm">
+            <div class="form-group">
+                <span>姓名</span>
+                <input type="text" id="name" placeholder="请输入您的姓名" required>
+            </div>
+            <div class="form-group">
+                <span>学号</span>
+                <input type="text" id="studentId" placeholder="请输入您的学号" required>
+            </div>
+            <div class="form-group">
+                <span>密码</span>
+                <input type="password" id="password" placeholder="请输入密码" required>
+            </div>
+            <div class="form-group">
+                <span>确认密码</span>
+                <input type="password" id="confirmPassword" placeholder="请再次输入密码" required>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit">注册</button>
+                <br>
+                <br>
+            </div>
+        </form>
+
+        <!-- 消息提示 -->
+        <div id="message" class="backend-message" style="display: none;"></div>
+
+        <div class="links">
+            <a href="web.html">返回主页</a>
+            <a href="login.html">已有账户？登录</a>
+        </div>
+
+    </div>
+
+    <script>
+        // 处理表单提交
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // 获取表单数据
+            const name = document.getElementById('name').value.trim();
+            const studentId = document.getElementById('studentId').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // 验证必填字段
+            if (!name || !studentId || !password || !confirmPassword) {
+                showMessage('请填写所有必填字段', 'error');
+                return;
+            }
+
+            // 验证密码确认
+            if (password !== confirmPassword) {
+                showMessage('密码和确认密码不一致', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name,
+                        studentId,
+                        password,
+                        confirmPassword
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 注册成功后自动登录，保存sessionId和用户信息
+                    localStorage.setItem('sessionId', data.sessionId);
+                    localStorage.setItem('userName', data.user.name);
+                    localStorage.setItem('userStudentId', data.user.studentId);
+                    localStorage.setItem('isAdmin', data.user.isAdmin);
+                    
+                    showMessage('注册成功！正在自动登录...', 'success');
+                    // 3秒后跳转到主页
+                    setTimeout(() => {
+                        window.location.href = 'web.html';
+                    }, 3000);
+                } else {
+                    showMessage(data.message || '注册失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error registering:', error);
+            }
+        });
+
+        // 显示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.className = `backend-message ${type}`;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

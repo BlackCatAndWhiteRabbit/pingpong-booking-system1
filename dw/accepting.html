@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>接受预约 - 乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>现有预约列表</h1>
+        <h2>选择您想加入的预约</h2>
+        
+        
+        <div id="bookingsList" class="bookings-container">
+            <!-- 预约列表将在这里动态加载 -->
+            <div class="loading">正在加载预约列表...</div>
+        </div>
+
+        <!-- 加入预约表单 -->
+        <div id="joinForm" class="join-form" style="display: none;">
+            <h3>加入预约</h3>
+            <form id="joinBookingForm">
+                <input type="hidden" id="bookingId">
+                <div>
+                    <span>您的姓名</span>
+                    <input type="text" id="joinName" placeholder="请输入您的姓名" required>
+                </div>
+                <div>
+                    <span>您的学号</span>
+                    <input type="text" id="joinStudentId" placeholder="请输入您的学号" required>
+                </div>
+                <div>
+                    <button type="submit">确认加入</button>
+                    <button type="button" onclick="hideJoinForm()">取消</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="message" class="backend-message" style="display: none;"></div>
+
+        <div class="links">
+            <a href="web.html">返回主页</a>
+        </div>
+    </div>
+
+    <script>
+        // 加载预约列表
+        async function loadBookings() {
+            try {
+                const response = await fetch('/api/bookings');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayBookings(data.bookings);
+                } else {
+                    showMessage('加载预约列表失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error loading bookings:', error);
+            }
+        }
+
+        // 显示预约列表
+        function displayBookings(bookings) {
+            const container = document.getElementById('bookingsList');
+            const currentUserStudentId = localStorage.getItem('userStudentId');
+            
+            if (bookings.length === 0) {
+                container.innerHTML = '<div class="no-bookings">暂无预约，快去发起一个吧！</div>';
+                return;
+            }
+
+            container.innerHTML = bookings.map(booking => {
+                const isCreator = booking.studentId === currentUserStudentId;
+                const isParticipant = booking.participants.some(p => p.studentId === currentUserStudentId);
+                const canJoin = !isCreator && !isParticipant && booking.currentPlayers < booking.maxPlayers;
+                const canCancel = isCreator && !isBookingStarted(booking);
+                const canLeave = isParticipant && !isCreator && !isBookingStarted(booking);
+                const isStarted = isBookingStarted(booking);
+                
+                return `
+                <div class="booking-item">
+                    <div class="booking-info">
+                        <h3>预约 #${booking.id} ${isStarted ? '<span class="started-badge">已开始</span>' : ''}</h3>
+                        <p><strong>发起人:</strong> <a href="profile.html?studentId=${booking.studentId}" class="profile-link">${booking.name}</a> (${booking.studentId})</p>
+                        <p><strong>时间:</strong> ${formatDate(booking.actualDate)} ${booking.time}:00</p>
+                        <p><strong>球台:</strong> ${booking.table}号台</p>
+                        <p><strong>人数:</strong> ${booking.currentPlayers}/${booking.maxPlayers}</p>
+                        <p><strong>参与者:</strong> ${booking.participants.map(p => `<a href="profile.html?studentId=${p.studentId}" class="profile-link">${p.name}</a>(${p.studentId})`).join(', ')}</p>
+                    </div>
+                    <div class="booking-actions">
+                        ${canJoin ? 
+                            `<button onclick="joinBooking(${booking.id})" class="join-btn">加入</button>` :
+                            booking.currentPlayers >= booking.maxPlayers ? 
+                            `<button disabled class="join-btn disabled">已满员</button>` : ''
+                        }
+                        ${canCancel ? 
+                            `<button onclick="cancelBooking(${booking.id})" class="cancel-btn">取消预约</button>` : 
+                            ''
+                        }
+                        ${canLeave ? 
+                            `<button onclick="leaveBooking(${booking.id})" class="leave-btn">退出预约</button>` : 
+                            ''
+                        }
+                        ${checkAdminStatus() ? 
+                            `<button onclick="deleteBooking(${booking.id})" class="delete-btn">删除</button>` : 
+                            ''
+                        }
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // 格式化日期显示
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            const dayAfterTomorrow = new Date(today);
+            dayAfterTomorrow.setDate(today.getDate() + 2);
+            
+            if (date.toDateString() === today.toDateString()) {
+                return '今天';
+            } else if (date.toDateString() === tomorrow.toDateString()) {
+                return '明天';
+            } else if (date.toDateString() === dayAfterTomorrow.toDateString()) {
+                return '后天';
+            } else {
+                return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+            }
+        }
+
+        // 取消预约
+        async function cancelBooking(bookingId) {
+            const sessionId = localStorage.getItem('sessionId');
+            
+            if (!sessionId) {
+                showMessage('请先登录', 'error');
+                return;
+            }
+
+            if (!confirm('确定要取消这个预约吗？此操作不可撤销。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('预约取消成功', 'success');
+                    loadBookings(); // 重新加载列表
+                } else {
+                    showMessage(data.message || '取消失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error cancelling booking:', error);
+            }
+        }
+
+        // 退出预约
+        async function leaveBooking(bookingId) {
+            const sessionId = localStorage.getItem('sessionId');
+            
+            if (!sessionId) {
+                showMessage('请先登录', 'error');
+                return;
+            }
+
+            if (!confirm('确定要退出这个预约吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bookings/${bookingId}/leave`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('成功退出预约', 'success');
+                    loadBookings(); // 重新加载列表
+                } else {
+                    showMessage(data.message || '退出失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error leaving booking:', error);
+            }
+        }
+
+        // 加入预约
+        async function joinBooking(bookingId) {
+            const sessionId = localStorage.getItem('sessionId');
+            const userName = localStorage.getItem('userName');
+            const userStudentId = localStorage.getItem('userStudentId');
+            
+            if (!sessionId || !userName || !userStudentId) {
+                showMessage('请先登录才能加入预约', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bookings/${bookingId}/join`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        name: userName, 
+                        studentId: userStudentId 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('成功加入预约！', 'success');
+                    loadBookings(); // 重新加载列表
+                } else {
+                    showMessage(data.message || '加入失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error joining booking:', error);
+            }
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.className = `backend-message ${type}`;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // 页面加载时检查登录状态
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBookings();
+        });
+
+        // 检查管理员状态
+        function checkAdminStatus() {
+            const sessionId = localStorage.getItem('sessionId');
+            const userName = localStorage.getItem('userName');
+            const userStudentId = localStorage.getItem('userStudentId');
+            const isAdmin = localStorage.getItem('isAdmin') === 'true';
+            
+            return isAdmin && sessionId && userName && userStudentId;
+        }
+
+        // 删除预约
+        async function deleteBooking(bookingId) {
+            const sessionId = localStorage.getItem('sessionId');
+            
+            if (!sessionId) {
+                showMessage('请先登录', 'error');
+                return;
+            }
+
+            if (!confirm('确定要删除这个预约吗？此操作不可撤销。')) {
+                return;
+            }
+
+            try {
+                console.log('正在删除预约:', bookingId);
+                const response = await fetch(`/api/bookings/${bookingId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    }
+                });
+
+                console.log('删除响应状态:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('删除响应数据:', data);
+
+                if (data.success) {
+                    showMessage('预约删除成功', 'success');
+                    loadBookings(); // 重新加载列表
+                } else {
+                    showMessage(data.message || '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('删除预约错误详情:', error);
+                showMessage('网络错误，请稍后重试', 'error');
+            }
+        }
+
+        // 检查预约是否已经开始（前端版本）
+        function isBookingStarted(booking) {
+            const now = new Date();
+            const bookingStartTime = new Date(`${booking.actualDate}T${booking.time}:00:00`);
+            return now >= bookingStartTime;
+        }
+
+        // 页面加载时获取预约列表
+        document.addEventListener('DOMContentLoaded', loadBookings);
+    </script>
+</body>
+</html>

@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人主页 - 乒乓球在线预约系统</title>
+    <link rel="stylesheet" href="web.css">
+</head>
+<body>
+    <div class="container">
+        <div class="avatar">
+            <img src="avatar.jpg" alt="Your Cosmic Avatar">
+        </div>
+        <h1>个人主页</h1>
+        
+        <!-- 用户信息显示区域 -->
+        <div id="userProfile" class="profile-container">
+            <div class="profile-header">
+                <h2 id="profileName">加载中...</h2>
+                <p id="profileStudentId">学号: 加载中...</p>
+            </div>
+            
+            <div class="profile-info">
+                <div class="info-item">
+                    <strong>水平等级:</strong>
+                    <span id="profileLevel">加载中...</span>
+                </div>
+                <div class="info-item">
+                    <strong>个人简介:</strong>
+                    <p id="profileBio" class="bio-text">加载中...</p>
+                </div>
+                <div class="info-item">
+                    <strong>注册时间:</strong>
+                    <span id="profileCreatedAt">加载中...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 编辑个人信息表单（仅自己可见） -->
+        <div id="editProfileForm" class="edit-form" style="display: none;">
+            <h3>编辑个人信息</h3>
+            <form id="profileForm">
+                <div class="form-group">
+                    <span>个人简介</span>
+                    <textarea id="editBio" placeholder="介绍一下自己吧..." rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <span>乒乓球水平</span>
+                    <div class="radio-group">
+                        <label><input type="radio" name="level" value="0">未设置</label>
+                        <label><input type="radio" name="level" value="1">1 - 萌新</label>
+                        <label><input type="radio" name="level" value="2">2 - 业余爱好者</label>
+                        <label><input type="radio" name="level" value="3">3 - 业余校队</label>
+                        <label><input type="radio" name="level" value="4">4 - 体校选手</label>
+                        <label><input type="radio" name="level" value="5">5 - 国家级运动员</label>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit">保存修改</button>
+                    <button type="button" onclick="cancelEdit()">取消</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div id="profileActions" class="profile-actions" style="display: none;">
+            <button onclick="enableEdit()" class="edit-btn">编辑个人信息</button>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="message" class="backend-message" style="display: none;"></div>
+
+        <!-- 历史预约和评分统计 -->
+        <div id="historySection" class="history-section" style="display: none;">
+            <h2>历史预约和评分统计</h2>
+            
+            <!-- 评分统计 -->
+            <div id="ratingStats" class="rating-stats">
+                <h3>评分统计</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <strong>实力评分</strong>
+                        <div class="stat-details">
+                            <span>平均分: <span id="avgSkill">0</span></span>
+                            <span>评分人数: <span id="skillCount">0</span></span>
+                        </div>
+                        <div id="skillDistribution" class="distribution"></div>
+                    </div>
+                    <div class="stat-item">
+                        <strong>愉悦度评分</strong>
+                        <div class="stat-details">
+                            <span>平均分: <span id="avgPleasure">0</span></span>
+                            <span>评分人数: <span id="pleasureCount">0</span></span>
+                        </div>
+                        <div id="pleasureDistribution" class="distribution"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史预约 -->
+            <div id="historyBookings" class="history-bookings">
+                <h3>历史预约</h3>
+                <div id="historyList" class="history-list">
+                    <!-- 历史预约列表将在这里动态加载 -->
+                </div>
+            </div>
+        </div>
+
+        <div class="links">
+            <a href="web.html">返回主页</a>
+            <a href="accepting.html">查看预约</a>
+        </div>
+    </div>
+
+    <script>
+        let currentStudentId = '';
+        let isOwnProfile = false;
+
+        // 页面加载时获取用户信息
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserProfile();
+            loadHistoryAndRatings();
+            loadRatings();
+        });
+
+        // 加载用户个人主页信息
+        async function loadUserProfile() {
+            try {
+                // 从URL参数获取学号
+                const urlParams = new URLSearchParams(window.location.search);
+                const studentId = urlParams.get('studentId');
+                
+                if (!studentId) {
+                    showMessage('无效的用户页面', 'error');
+                    return;
+                }
+
+                currentStudentId = studentId;
+
+                const response = await fetch(`/api/users/${studentId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayUserProfile(data.user);
+                    checkOwnership(data.user);
+                } else {
+                    showMessage(data.message || '加载用户信息失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error loading user profile:', error);
+            }
+        }
+
+        // 显示用户信息
+        function displayUserProfile(user) {
+            document.getElementById('profileName').textContent = user.name;
+            document.getElementById('profileStudentId').textContent = `学号: ${user.studentId}`;
+            document.getElementById('profileLevel').textContent = getLevelText(user.level);
+            document.getElementById('profileBio').textContent = user.bio || '暂无个人简介';
+            document.getElementById('profileCreatedAt').textContent = formatDate(user.createdAt);
+        }
+
+        // 检查是否是自己的主页
+        function checkOwnership(user) {
+            const sessionId = localStorage.getItem('sessionId');
+            const currentStudentId = localStorage.getItem('userStudentId');
+            
+            if (sessionId && currentStudentId === user.studentId) {
+                isOwnProfile = true;
+                document.getElementById('profileActions').style.display = 'block';
+            }
+        }
+
+        // 启用编辑模式
+        function enableEdit() {
+            document.getElementById('userProfile').style.display = 'none';
+            document.getElementById('editProfileForm').style.display = 'block';
+            document.getElementById('profileActions').style.display = 'none';
+            
+            // 填充当前信息到表单
+            const sessionId = localStorage.getItem('sessionId');
+            if (sessionId) {
+                fetch('/api/user', {
+                    headers: {
+                        'Authorization': sessionId
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 获取完整用户信息
+                        fetch(`/api/users/${data.user.studentId}`)
+                        .then(response => response.json())
+                        .then(userData => {
+                            if (userData.success) {
+                                document.getElementById('editBio').value = userData.user.bio || '';
+                                // 设置水平等级单选按钮
+                                const levelRadios = document.getElementsByName('level');
+                                for (let radio of levelRadios) {
+                                    if (radio.value === userData.user.level.toString()) {
+                                        radio.checked = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // 取消编辑
+        function cancelEdit() {
+            document.getElementById('userProfile').style.display = 'block';
+            document.getElementById('editProfileForm').style.display = 'none';
+            if (isOwnProfile) {
+                document.getElementById('profileActions').style.display = 'block';
+            }
+        }
+
+        // 处理表单提交
+        document.getElementById('profileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                showMessage('请先登录', 'error');
+                return;
+            }
+
+            const bio = document.getElementById('editBio').value.trim();
+            const level = document.querySelector('input[name="level"]:checked')?.value;
+
+            try {
+                const response = await fetch('/api/users/profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': sessionId
+                    },
+                    body: JSON.stringify({
+                        bio: bio,
+                        level: level
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('个人信息更新成功！', 'success');
+                    // 重新加载页面显示更新后的信息
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showMessage(data.message || '更新失败', 'error');
+                }
+            } catch (error) {
+                showMessage('网络错误，请稍后重试', 'error');
+                console.error('Error updating profile:', error);
+            }
+        });
+
+        // 获取水平等级文本
+        function getLevelText(level) {
+            const levels = {
+                0: '未设置',
+                1: '萌新',
+                2: '业余爱好者',
+                3: '业余校队',
+                4: '体校选手',
+                5: '国家级运动员'
+            };
+            return levels[level] || '未设置';
+        }
+
+        // 格式化日期
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN');
+        }
+
+        // 加载历史预约和评分数据
+        async function loadHistoryAndRatings() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const studentId = urlParams.get('studentId');
+                
+                if (!studentId) return;
+
+                const response = await fetch(`/api/users/${studentId}/history`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayRatingStats(data.ratingStats);
+                    displayHistoryBookings(data.historyBookings);
+                    document.getElementById('historySection').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading history and ratings:', error);
+            }
+        }
+
+        // 显示评分统计
+        function displayRatingStats(ratingStats) {
+            document.getElementById('avgSkill').textContent = ratingStats.avgSkill.toFixed(1);
+            document.getElementById('skillCount').textContent = ratingStats.skillCount;
+            document.getElementById('avgPleasure').textContent = ratingStats.avgPleasure.toFixed(1);
+            document.getElementById('pleasureCount').textContent = ratingStats.pleasureCount;
+
+            // 显示五角星评分
+            displayStarRating('skill', ratingStats.avgSkill);
+            displayStarRating('pleasure', ratingStats.avgPleasure);
+
+            // 显示分数分布
+            displayDistribution('skillDistribution', ratingStats.skillDistribution);
+            displayDistribution('pleasureDistribution', ratingStats.pleasureDistribution);
+        }
+
+        // 显示五角星评分
+        function displayStarRating(type, averageScore) {
+            const container = document.getElementById(`avg${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const parent = container.parentElement;
+            
+            // 创建五角星评分组件
+            const starRating = document.createElement('div');
+            starRating.className = 'star-rating';
+            starRating.innerHTML = `
+                <div class="stars-container">
+                    ${createStars(averageScore)}
+                </div>
+                <span class="star-rating-text">${averageScore.toFixed(1)}分</span>
+            `;
+            
+            // 替换原来的平均分显示
+            parent.replaceChild(starRating, container);
+        }
+
+        // 创建五角星
+        function createStars(averageScore) {
+            let starsHTML = '';
+            const fullStars = Math.floor(averageScore);
+            const partialStar = averageScore - fullStars;
+            
+            // 添加完整星星
+            for (let i = 0; i < fullStars; i++) {
+                starsHTML += '<div class="star filled">★</div>';
+            }
+            
+            // 添加部分星星
+            if (partialStar > 0) {
+                starsHTML += `<div class="star partial" style="--fill-percentage: ${partialStar * 100}%">★</div>`;
+            }
+            
+            // 添加空星星
+            const remainingStars = 5 - Math.ceil(averageScore);
+            for (let i = 0; i < remainingStars; i++) {
+                starsHTML += '<div class="star">★</div>';
+            }
+            
+            return starsHTML;
+        }
+
+        // 显示分数分布
+        function displayDistribution(elementId, distribution) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '';
+            
+            for (let i = 1; i <= 5; i++) {
+                const count = distribution[i] || 0;
+                const percentage = ratingStats.skillCount > 0 ? (count / ratingStats.skillCount * 100).toFixed(1) : 0;
+                
+                const bar = document.createElement('div');
+                bar.className = 'distribution-bar';
+                bar.innerHTML = `
+                    <span class="score">${i}分</span>
+                    <div class="bar-container">
+                        <div class="bar" style="width: ${percentage}%"></div>
+                    </div>
+                    <span class="count">${count}人</span>
+                `;
+                element.appendChild(bar);
+            }
+        }
+
+        // 显示历史预约
+        function displayHistoryBookings(bookings) {
+            const historyList = document.getElementById('historyList');
+            
+            if (bookings.length === 0) {
+                historyList.innerHTML = '<div class="no-history">暂无历史预约</div>';
+                return;
+            }
+
+            historyList.innerHTML = bookings.map(booking => {
+                const isCreator = booking.studentId === currentStudentId;
+                const role = isCreator ? '发起者' : '参与者';
+                
+                // 检查是否所有参与者都已评分
+                const currentUserStudentId = localStorage.getItem('userStudentId');
+                
+                // 构建参与者列表（只包含其他参与者，不包含当前用户自己）
+                const participantsToRate = [];
+                
+                // 添加发起者（如果不是当前用户自己）
+                if (booking.studentId !== currentUserStudentId) {
+                    participantsToRate.push({ name: booking.name, studentId: booking.studentId });
+                }
+                
+                // 添加其他参与者（如果不是当前用户自己）
+                booking.participants.forEach(participant => {
+                    if (participant.studentId !== currentUserStudentId) {
+                        // 检查是否已经添加过该参与者（去重）
+                        const alreadyAdded = participantsToRate.some(p => p.studentId === participant.studentId);
+                        if (!alreadyAdded) {
+                            participantsToRate.push(participant);
+                        }
+                    }
+                });
+                
+                let allRated = true;
+                if (participantsToRate.length > 0) {
+                    allRated = participantsToRate.every(participant => {
+                        return ratings.some(r => 
+                            r.bookingId === booking.id && 
+                            r.raterStudentId === currentUserStudentId && 
+                            r.ratedStudentId === participant.studentId
+                        );
+                    });
+                }
+                
+                return `
+                <div class="history-booking-item">
+                    <div class="booking-info">
+                        <h4>预约 #${booking.id} (${role})</h4>
+                        <p><strong>时间:</strong> ${formatDate(booking.actualDate)} ${booking.time}:00</p>
+                        <p><strong>球台:</strong> ${booking.table}号台</p>
+                        <p><strong>参与人数:</strong> ${booking.currentPlayers}人</p>
+                        <p><strong>参与者:</strong> ${booking.participants.map(p => 
+                            `<a href="profile.html?studentId=${p.studentId}" class="profile-link">${p.name}</a>`
+                        ).join(', ')}</p>
+                    </div>
+                    ${isOwnProfile ? `
+                    <div class="rating-actions">
+                        ${allRated ? 
+                            '<span class="rated-badge">已评分</span>' :
+                            `<button onclick="rateParticipants(${booking.id})" class="rate-btn">为参与者评分</button>`
+                        }
+                    </div>
+                    ` : ''}
+                </div>
+                `;
+            }).join('');
+        }
+
+        // 为参与者评分
+        function rateParticipants(bookingId) {
+            // 获取预约信息
+            fetch(`/api/bookings`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const booking = data.bookings.find(b => b.id === bookingId);
+                        if (!booking) {
+                            // 如果当前预约列表中找不到，可能是已完成的预约
+                            // 从历史预约中查找
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const studentId = urlParams.get('studentId');
+                            if (studentId) {
+                                fetch(`/api/users/${studentId}/history`)
+                                    .then(response => response.json())
+                                    .then(historyData => {
+                                        if (historyData.success) {
+                                            const historyBooking = historyData.historyBookings.find(b => b.id === bookingId);
+                                            if (historyBooking) {
+                                                showRatingModal(historyBooking);
+                                            } else {
+                                                alert('找不到该预约信息');
+                                            }
+                                        }
+                                    });
+                            }
+                        } else {
+                            showRatingModal(booking);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading booking:', error);
+                    alert('加载预约信息失败');
+                });
+        }
+
+        // 显示评分弹窗
+        function showRatingModal(booking) {
+            const currentStudentId = localStorage.getItem('userStudentId');
+            
+            // 构建参与者列表（只包含其他参与者，不包含当前用户自己）
+            const participantsToRate = [];
+            
+            // 添加发起者（如果不是当前用户自己）
+            if (booking.studentId !== currentStudentId) {
+                participantsToRate.push({ name: booking.name, studentId: booking.studentId });
+            }
+            
+            // 添加其他参与者（如果不是当前用户自己）
+            booking.participants.forEach(participant => {
+                if (participant.studentId !== currentStudentId) {
+                    // 检查是否已经添加过该参与者（去重）
+                    const alreadyAdded = participantsToRate.some(p => p.studentId === participant.studentId);
+                    if (!alreadyAdded) {
+                        participantsToRate.push(participant);
+                    }
+                }
+            });
+            
+            // 检查是否已经评分过
+            const ratedParticipants = [];
+            participantsToRate.forEach(participant => {
+                const existingRating = ratings.find(r => 
+                    r.bookingId === booking.id && 
+                    r.raterStudentId === currentStudentId && 
+                    r.ratedStudentId === participant.studentId
+                );
+                if (existingRating) {
+                    ratedParticipants.push(participant.studentId);
+                }
+            });
+
+            // 创建评分弹窗
+            const modal = document.createElement('div');
+            modal.className = 'rating-modal';
+            modal.innerHTML = `
+                <div class="rating-modal-content">
+                    <h3>为预约 #${booking.id} 的参与者评分</h3>
+                    <p class="rating-instruction">请为其他 ${participantsToRate.length} 位参与者评分（每人需要评分一次）</p>
+                    <div id="ratingForms" class="rating-forms">
+                        ${participantsToRate.map(participant => {
+                            const isRated = ratedParticipants.includes(participant.studentId);
+                            return `
+                            <div class="rating-form ${isRated ? 'rated' : ''}" data-student-id="${participant.studentId}">
+                                <h4>为 ${participant.name} (${participant.studentId}) 评分</h4>
+                                ${isRated ? 
+                                    '<p class="rated-text">✓ 已评分</p>' :
+                                    `
+                                    <div class="rating-inputs">
+                                        <div class="rating-item">
+                                            <label>实力评分 (1-5分):</label>
+                                            <select class="skill-rating">
+                                                <option value="">请选择</option>
+                                                <option value="1">1分 - 萌新</option>
+                                                <option value="2">2分 - 业余爱好者</option>
+                                                <option value="3">3分 - 业余校队</option>
+                                                <option value="4">4分 - 体校选手</option>
+                                                <option value="5">5分 - 国家级运动员</option>
+                                            </select>
+                                        </div>
+                                        <div class="rating-item">
+                                            <label>愉悦度评分 (1-5分):</label>
+                                            <select class="pleasure-rating">
+                                                <option value="">请选择</option>
+                                                <option value="1">1分</option>
+                                                <option value="2">2分</option>
+                                                <option value="3">3分</option>
+                                                <option value="4">4分</option>
+                                                <option value="5">5分</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    `
+                                }
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div class="rating-actions">
+                        <button onclick="submitRatings(${booking.id})" class="submit-ratings-btn">提交评分</button>
+                        <button onclick="closeRatingModal()" class="cancel-ratings-btn">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // 存储当前评分数据
+            window.currentRatingData = {
+                bookingId: booking.id,
+                participants: participantsToRate
+            };
+        }
+
+        // 关闭评分弹窗
+        function closeRatingModal() {
+            const modal = document.querySelector('.rating-modal');
+            if (modal) {
+                document.body.removeChild(modal);
+            }
+            delete window.currentRatingData;
+        }
+
+        // 提交评分
+        async function submitRatings(bookingId) {
+            const sessionId = localStorage.getItem('sessionId');
+            if (!sessionId) {
+                alert('请先登录');
+                return;
+            }
+
+            const ratingForms = document.querySelectorAll('.rating-form:not(.rated)');
+            const ratingsToSubmit = [];
+
+            // 收集所有评分（只对其他参与者）
+            for (const form of ratingForms) {
+                const studentId = form.dataset.studentId;
+                const skillRating = form.querySelector('.skill-rating')?.value;
+                const pleasureRating = form.querySelector('.pleasure-rating')?.value;
+
+                if (!skillRating || !pleasureRating) {
+                    alert('请为所有其他参与者完成评分');
+                    return;
+                }
+
+                // 确保不会对自己评分
+                const currentUserStudentId = localStorage.getItem('userStudentId');
+                if (studentId === currentUserStudentId) {
+                    console.warn('尝试对自己评分，已跳过');
+                    continue;
+                }
+
+                ratingsToSubmit.push({
+                    bookingId: bookingId,
+                    ratedStudentId: studentId,
+                    skill: parseInt(skillRating),
+                    pleasure: parseInt(pleasureRating)
+                });
+            }
+
+            // 检查是否有评分需要提交
+            if (ratingsToSubmit.length === 0) {
+                alert('所有其他参与者都已评分完成！');
+                closeRatingModal();
+                return;
+            }
+
+            // 提交所有评分
+            try {
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const rating of ratingsToSubmit) {
+                    try {
+                        const response = await fetch('/api/ratings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': sessionId
+                            },
+                            body: JSON.stringify(rating)
+                        });
+
+                        const data = await response.json();
+                if (data.success) {
+                    successCount++;
+                    // 标记该表单为已评分状态
+                    const ratedForm = document.querySelector(`.rating-form[data-student-id="${rating.ratedStudentId}"]`);
+                    if (ratedForm) {
+                        ratedForm.classList.add('rated');
+                        ratedForm.innerHTML = `
+                            <h4>为 ${ratedForm.querySelector('h4').textContent.split('为 ')[1]} 评分</h4>
+                            <p class="rated-text">✓ 已评分</p>
+                        `;
+                    }
+                    
+                    // 如果预约被删除，记录这个信息
+                    if (data.bookingDeleted) {
+                        window.bookingDeleted = true;
+                    }
+                } else {
+                    errorCount++;
+                    console.error('评分失败:', data.message);
+                }
+                    } catch (error) {
+                        errorCount++;
+                        console.error('网络错误:', error);
+                    }
+                }
+
+                if (errorCount === 0) {
+                    alert('评分提交成功！');
+                    closeRatingModal();
+                    // 重新加载页面以更新评分统计
+                    window.location.reload();
+                } else if (successCount > 0) {
+                    alert(`部分评分提交成功！成功: ${successCount}个，失败: ${errorCount}个`);
+                    // 检查是否还有未评分的表单
+                    const remainingForms = document.querySelectorAll('.rating-form:not(.rated)');
+                    if (remainingForms.length === 0) {
+                        closeRatingModal();
+                        window.location.reload();
+                    }
+                } else {
+                    alert('评分提交失败，请重试');
+                }
+            } catch (error) {
+                alert('评分提交失败: ' + error.message);
+            }
+        }
+
+        // 全局存储评分数据（用于临时存储）
+        let ratings = [];
+
+        // 页面加载时加载评分数据
+        async function loadRatings() {
+            try {
+                const sessionId = localStorage.getItem('sessionId');
+                if (!sessionId) return;
+
+                const response = await fetch('/api/ratings');
+                const data = await response.json();
+                if (data.success) {
+                    ratings = data.ratings;
+                }
+            } catch (error) {
+                console.error('Error loading ratings:', error);
+            }
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.className = `backend-message ${type}`;
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
